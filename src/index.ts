@@ -76,3 +76,4 @@ process.on('SIGINT', async () => {
   await redis.disconnect();
   process.exit(0);
 });
+
