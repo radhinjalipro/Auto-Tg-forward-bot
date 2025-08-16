@@ -1,0 +1,78 @@
+import { config as dotenvConfig } from 'dotenv';
+dotenvConfig();
+
+import express from 'express';
+import { Bot, webhookCallback } from 'grammy';
+import { createClient } from 'redis';
+// Use @grammyjs/storage-redis if installed; else, implement custom session storage
+// import { RedisAdapter } from '@grammyjs/storage-redis'; // Optional advanced
+
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const WEBHOOK_HOST = process.env.WEBHOOK_HOST;   // e.g., "https://your-app.onrender.com"
+const REDIS_URI = process.env.REDIS_URI;
+const PORT = Number(process.env.PORT) || 3000;
+const WEBHOOK_PATH = '/webhook';
+
+if (!BOT_TOKEN || !WEBHOOK_HOST || !REDIS_URI) {
+  throw new Error('BOT_TOKEN, WEBHOOK_HOST, and REDIS_URI must be set as environment variables!');
+}
+
+// Initialize Redis client for channel storage
+const redis = createClient({ url: REDIS_URI });
+redis.on('error', (err) => console.error('Redis error:', err));
+await redis.connect();
+
+// Initialize grammY bot
+const bot = new Bot(BOT_TOKEN);
+
+// --- Register your bot commands here (examples) ---
+bot.command('start', async (ctx) => {
+  await ctx.reply('Welcome! Use /help for instructions.');
+});
+
+bot.command('help', async (ctx) => {
+  await ctx.reply(
+    'Available commands:\n/start - Start bot\n/help - Show help\n/set - Add forward config\n/rem - Remove config\n/get - Show all configs\n/set_owner - Set owner\n(Owner-only except /start, /help)'
+  );
+});
+
+// --- Add the remaining command handlers and business logic here ---
+// See documentation and separate command modules for clean code
+
+// Error handling for grammY
+bot.catch((err) => {
+  console.error('Error while handling update:', err);
+});
+
+// Set up Express server for webhooks
+const app = express();
+app.use(express.json());
+
+// Mount grammY webhook handler
+app.use(WEBHOOK_PATH, webhookCallback(bot, 'express'));
+
+// Start HTTP server on 0.0.0.0:<PORT> for Render.com port scan
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`Server is listening on 0.0.0.0:${PORT}${WEBHOOK_PATH}`);
+
+  // Set webhook at startup (may be better to do this as a one-time task or remotely)
+  const webhookUrl = `${WEBHOOK_HOST}${WEBHOOK_PATH}`;
+  try {
+    await bot.api.setWebhook(webhookUrl);
+    console.log(`Telegram webhook set to: ${webhookUrl}`);
+  } catch (err) {
+    console.error('Failed to set Telegram webhook:', err);
+  }
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.info('Shutting down...');
+  await redis.disconnect();
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  console.info('Interrupted, closing...');
+  await redis.disconnect();
+  process.exit(0);
+});
