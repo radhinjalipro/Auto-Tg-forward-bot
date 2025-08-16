@@ -17,7 +17,7 @@ if (!BOT_TOKEN || !WEBHOOK_HOST || !REDIS_URI) {
   throw new Error('BOT_TOKEN, WEBHOOK_HOST, and REDIS_URI must be set as environment variables!');
 }
 
-// Initialize Redis client for channel storage
+// Initialize Redis client for channel storage developed by me
 const redis = createClient({ url: REDIS_URI });
 redis.on('error', (err) => console.error('Redis error:', err));
 await redis.connect();
